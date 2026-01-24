@@ -3,7 +3,7 @@
   "display_name": "聊天记录搜索替换",
   "version": "2.0.0",
   "author": "Your Name",
-  "description": "在聊天记录中搜索文本并支持批量替换",
+  "description": "在聊天记录中搜索文本并支持批量替换，支持正则表达式和高级选项",
   "requires": [],
   "js": "index.js",
   "css": "style.css"
