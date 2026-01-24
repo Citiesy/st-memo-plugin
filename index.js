@@ -3,12 +3,184 @@
 
   let searchPanel = null;
   let searchResults = [];
+  
+  // 默认设置
+  const DEFAULT_SETTINGS = {
+    caseSensitive: false,
+    wholeWord: false,
+    useRegex: false,
+    autoSave: true,
+    confirmReplace: true
+  };
+  
+  let settings = { ...DEFAULT_SETTINGS };
 
   // 初始化插件
   function init() {
     console.log('[Search & Replace] 插件加载中...');
+    
+    loadSettings();
     addTriggerButton();
+    registerSettingsPanel();
+    
     console.log('[Search & Replace] 插件加载完成');
+  }
+
+  // 加载设置
+  function loadSettings() {
+    const saved = localStorage.getItem('search_replace_settings');
+    if (saved) {
+      try {
+        settings = { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+      } catch (e) {
+        console.error('[Search & Replace] 加载设置失败:', e);
+      }
+    }
+  }
+
+  // 保存设置
+  function saveSettings() {
+    if (settings.autoSave) {
+      localStorage.setItem('search_replace_settings', JSON.stringify(settings));
+    }
+  }
+
+  // 注册设置面板
+  async function registerSettingsPanel() {
+    try {
+      await ST_API.ui.registerSettingsPanel({
+        id: 'search-replace.settings',
+        title: '搜索与替换设置',
+        target: 'right',
+        content: {
+          kind: 'render',
+          render: renderSettingsPanel
+        }
+      });
+      console.log('[Search & Replace] 设置面板已注册');
+    } catch (error) {
+      console.error('[Search & Replace] 设置面板注册失败:', error);
+    }
+  }
+
+  // 渲染设置面板
+  function renderSettingsPanel(container) {
+    container.className = 'sr-settings-panel';
+    
+    container.innerHTML = `
+      <div class="sr-setting-item">
+        <span class="sr-setting-label">默认搜索选项</span>
+        <div class="sr-switch-group">
+          <div class="sr-switch-item">
+            <div class="sr-switch-info">
+              <div class="sr-switch-title">区分大小写</div>
+              <div class="sr-switch-desc">搜索时区分字母大小写</div>
+            </div>
+            <label class="sr-switch">
+              <input type="checkbox" id="sr-setting-case" ${settings.caseSensitive ? 'checked' : ''}>
+              <span class="sr-switch-slider"></span>
+            </label>
+          </div>
+          
+          <div class="sr-switch-item">
+            <div class="sr-switch-info">
+              <div class="sr-switch-title">全词匹配</div>
+              <div class="sr-switch-desc">仅匹配完整的单词，不匹配部分内容</div>
+            </div>
+            <label class="sr-switch">
+              <input type="checkbox" id="sr-setting-word" ${settings.wholeWord ? 'checked' : ''}>
+              <span class="sr-switch-slider"></span>
+            </label>
+          </div>
+          
+          <div class="sr-switch-item">
+            <div class="sr-switch-info">
+              <div class="sr-switch-title">使用正则表达式</div>
+              <div class="sr-switch-desc">启用高级正则表达式搜索</div>
+            </div>
+            <label class="sr-switch">
+              <input type="checkbox" id="sr-setting-regex" ${settings.useRegex ? 'checked' : ''}>
+              <span class="sr-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="sr-setting-item">
+        <span class="sr-setting-label">操作选项</span>
+        <div class="sr-switch-group">
+          <div class="sr-switch-item">
+            <div class="sr-switch-info">
+              <div class="sr-switch-title">自动保存设置</div>
+              <div class="sr-switch-desc">自动保存您的偏好设置</div>
+            </div>
+            <label class="sr-switch">
+              <input type="checkbox" id="sr-setting-autosave" ${settings.autoSave ? 'checked' : ''}>
+              <span class="sr-switch-slider"></span>
+            </label>
+          </div>
+          
+          <div class="sr-switch-item">
+            <div class="sr-switch-info">
+              <div class="sr-switch-title">替换前确认</div>
+              <div class="sr-switch-desc">批量替换前显示确认对话框</div>
+            </div>
+            <label class="sr-switch">
+              <input type="checkbox" id="sr-setting-confirm" ${settings.confirmReplace ? 'checked' : ''}>
+              <span class="sr-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // 绑定事件
+    const handlers = [];
+    
+    const caseCheckbox = container.querySelector('#sr-setting-case');
+    const caseHandler = (e) => {
+      settings.caseSensitive = e.target.checked;
+      saveSettings();
+    };
+    caseCheckbox.addEventListener('change', caseHandler);
+    handlers.push(() => caseCheckbox.removeEventListener('change', caseHandler));
+    
+    const wordCheckbox = container.querySelector('#sr-setting-word');
+    const wordHandler = (e) => {
+      settings.wholeWord = e.target.checked;
+      saveSettings();
+    };
+    wordCheckbox.addEventListener('change', wordHandler);
+    handlers.push(() => wordCheckbox.removeEventListener('change', wordHandler));
+    
+    const regexCheckbox = container.querySelector('#sr-setting-regex');
+    const regexHandler = (e) => {
+      settings.useRegex = e.target.checked;
+      saveSettings();
+    };
+    regexCheckbox.addEventListener('change', regexHandler);
+    handlers.push(() => regexCheckbox.removeEventListener('change', regexHandler));
+    
+    const autosaveCheckbox = container.querySelector('#sr-setting-autosave');
+    const autosaveHandler = (e) => {
+      settings.autoSave = e.target.checked;
+      saveSettings();
+    };
+    autosaveCheckbox.addEventListener('change', autosaveHandler);
+    handlers.push(() => autosaveCheckbox.removeEventListener('change', autosaveHandler));
+    
+    const confirmCheckbox = container.querySelector('#sr-setting-confirm');
+    const confirmHandler = (e) => {
+      settings.confirmReplace = e.target.checked;
+      saveSettings();
+    };
+    confirmCheckbox.addEventListener('change', confirmHandler);
+    handlers.push(() => confirmCheckbox.removeEventListener('change', confirmHandler));
+    
+    // 返回清理函数
+    return () => {
+      handlers.forEach(cleanup => cleanup());
+    };
   }
 
   // 添加触发按钮
@@ -74,15 +246,15 @@
         
         <div class="sr-options">
           <div class="sr-option">
-            <input type="checkbox" id="sr-case-sensitive">
+            <input type="checkbox" id="sr-case-sensitive" ${settings.caseSensitive ? 'checked' : ''}>
             <label for="sr-case-sensitive">区分大小写</label>
           </div>
           <div class="sr-option">
-            <input type="checkbox" id="sr-whole-word">
+            <input type="checkbox" id="sr-whole-word" ${settings.wholeWord ? 'checked' : ''}>
             <label for="sr-whole-word">全词匹配</label>
           </div>
           <div class="sr-option">
-            <input type="checkbox" id="sr-regex">
+            <input type="checkbox" id="sr-regex" ${settings.useRegex ? 'checked' : ''}>
             <label for="sr-regex">正则表达式</label>
           </div>
         </div>
@@ -276,7 +448,7 @@
       return;
     }
 
-    if (!confirm(`确定要替换 ${searchResults.length} 条消息中的内容吗？此操作不可撤销。`)) {
+    if (settings.confirmReplace && !confirm(`确定要替换 ${searchResults.length} 条消息中的内容吗？此操作不可撤销。`)) {
       return;
     }
 
