@@ -1,537 +1,483 @@
-(function() {
-  'use strict';
+(function () {
+  const MODULE_NAME = "ChatSearchReplace";
+  const PANEL_ID = "chat-search-replace";
 
-  let searchPanel = null;
-  let searchResults = [];
-  
-  // 默认设置
-  const DEFAULT_SETTINGS = {
+  // 状态管理
+  const state = {
+    searchResults: [],      // 搜索结果 [{index, text, matches}]
+    currentResultIndex: -1, // 当前高亮的结果索引
+    isRegex: false,
     caseSensitive: false,
-    wholeWord: false,
-    useRegex: false,
-    autoSave: true,
-    confirmReplace: true
   };
-  
-  let settings = { ...DEFAULT_SETTINGS };
 
-  // 初始化插件
-  function init() {
-    console.log('[Search & Replace] 插件加载中...');
-    
-    loadSettings();
-    addTriggerButton();
-    registerSettingsPanel();
-    
-    console.log('[Search & Replace] 插件加载完成');
-  }
+  // 从酒馆获取 context
+  const ctx = SillyTavern.getContext();
+  const { eventSource, event_types } = ctx;
 
-  // 加载设置
-  function loadSettings() {
-    const saved = localStorage.getItem('search_replace_settings');
-    if (saved) {
-      try {
-        settings = { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
-      } catch (e) {
-        console.error('[Search & Replace] 加载设置失败:', e);
-      }
-    }
-  }
-
-  // 保存设置
-  function saveSettings() {
-    if (settings.autoSave) {
-      localStorage.setItem('search_replace_settings', JSON.stringify(settings));
-    }
-  }
-
-  // 注册设置面板
-  async function registerSettingsPanel() {
-    try {
-      await ST_API.ui.registerSettingsPanel({
-        id: 'search-replace.settings',
-        title: '搜索与替换设置',
-        target: 'right',
-        content: {
-          kind: 'render',
-          render: renderSettingsPanel
-        }
-      });
-      console.log('[Search & Replace] 设置面板已注册');
-    } catch (error) {
-      console.error('[Search & Replace] 设置面板注册失败:', error);
-    }
-  }
-
-  // 渲染设置面板
-  function renderSettingsPanel(container) {
-    container.className = 'sr-settings-panel';
-    
-    container.innerHTML = `
-      <div class="sr-setting-item">
-        <span class="sr-setting-label">默认搜索选项</span>
-        <div class="sr-switch-group">
-          <div class="sr-switch-item">
-            <div class="sr-switch-info">
-              <div class="sr-switch-title">区分大小写</div>
-              <div class="sr-switch-desc">搜索时区分字母大小写</div>
-            </div>
-            <label class="sr-switch">
-              <input type="checkbox" id="sr-setting-case" ${settings.caseSensitive ? 'checked' : ''}>
-              <span class="sr-switch-slider"></span>
-            </label>
-          </div>
-          
-          <div class="sr-switch-item">
-            <div class="sr-switch-info">
-              <div class="sr-switch-title">全词匹配</div>
-              <div class="sr-switch-desc">仅匹配完整的单词，不匹配部分内容</div>
-            </div>
-            <label class="sr-switch">
-              <input type="checkbox" id="sr-setting-word" ${settings.wholeWord ? 'checked' : ''}>
-              <span class="sr-switch-slider"></span>
-            </label>
-          </div>
-          
-          <div class="sr-switch-item">
-            <div class="sr-switch-info">
-              <div class="sr-switch-title">使用正则表达式</div>
-              <div class="sr-switch-desc">启用高级正则表达式搜索</div>
-            </div>
-            <label class="sr-switch">
-              <input type="checkbox" id="sr-setting-regex" ${settings.useRegex ? 'checked' : ''}>
-              <span class="sr-switch-slider"></span>
-            </label>
-          </div>
-        </div>
-      </div>
-      
-      <div class="sr-setting-item">
-        <span class="sr-setting-label">操作选项</span>
-        <div class="sr-switch-group">
-          <div class="sr-switch-item">
-            <div class="sr-switch-info">
-              <div class="sr-switch-title">自动保存设置</div>
-              <div class="sr-switch-desc">自动保存您的偏好设置</div>
-            </div>
-            <label class="sr-switch">
-              <input type="checkbox" id="sr-setting-autosave" ${settings.autoSave ? 'checked' : ''}>
-              <span class="sr-switch-slider"></span>
-            </label>
-          </div>
-          
-          <div class="sr-switch-item">
-            <div class="sr-switch-info">
-              <div class="sr-switch-title">替换前确认</div>
-              <div class="sr-switch-desc">批量替换前显示确认对话框</div>
-            </div>
-            <label class="sr-switch">
-              <input type="checkbox" id="sr-setting-confirm" ${settings.confirmReplace ? 'checked' : ''}>
-              <span class="sr-switch-slider"></span>
-            </label>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    // 绑定事件
-    const handlers = [];
-    
-    const caseCheckbox = container.querySelector('#sr-setting-case');
-    const caseHandler = (e) => {
-      settings.caseSensitive = e.target.checked;
-      saveSettings();
-    };
-    caseCheckbox.addEventListener('change', caseHandler);
-    handlers.push(() => caseCheckbox.removeEventListener('change', caseHandler));
-    
-    const wordCheckbox = container.querySelector('#sr-setting-word');
-    const wordHandler = (e) => {
-      settings.wholeWord = e.target.checked;
-      saveSettings();
-    };
-    wordCheckbox.addEventListener('change', wordHandler);
-    handlers.push(() => wordCheckbox.removeEventListener('change', wordHandler));
-    
-    const regexCheckbox = container.querySelector('#sr-setting-regex');
-    const regexHandler = (e) => {
-      settings.useRegex = e.target.checked;
-      saveSettings();
-    };
-    regexCheckbox.addEventListener('change', regexHandler);
-    handlers.push(() => regexCheckbox.removeEventListener('change', regexHandler));
-    
-    const autosaveCheckbox = container.querySelector('#sr-setting-autosave');
-    const autosaveHandler = (e) => {
-      settings.autoSave = e.target.checked;
-      saveSettings();
-    };
-    autosaveCheckbox.addEventListener('change', autosaveHandler);
-    handlers.push(() => autosaveCheckbox.removeEventListener('change', autosaveHandler));
-    
-    const confirmCheckbox = container.querySelector('#sr-setting-confirm');
-    const confirmHandler = (e) => {
-      settings.confirmReplace = e.target.checked;
-      saveSettings();
-    };
-    confirmCheckbox.addEventListener('change', confirmHandler);
-    handlers.push(() => confirmCheckbox.removeEventListener('change', confirmHandler));
-    
-    // 返回清理函数
-    return () => {
-      handlers.forEach(cleanup => cleanup());
-    };
-  }
-
-  // 添加触发按钮
-  function addTriggerButton() {
-    const sendForm = document.getElementById('send_form');
-    if (!sendForm) {
-      console.warn('[Search & Replace] 未找到消息输入表单');
-      return;
-    }
-
-    const btn = document.createElement('div');
-    btn.id = 'search-replace-trigger';
-    btn.className = 'fa-solid fa-magnifying-glass';
-    btn.title = '搜索与替换';
-    
-    btn.addEventListener('click', togglePanel);
-    
-    const sendButton = sendForm.querySelector('#send_but');
-    if (sendButton) {
-      sendButton.parentNode.insertBefore(btn, sendButton);
-    } else {
-      sendForm.appendChild(btn);
-    }
-  }
-
-  // 切换面板
-  function togglePanel() {
-    if (searchPanel) {
-      closePanel();
-    } else {
-      openPanel();
-    }
-  }
-
-  // 打开搜索面板
-  function openPanel() {
-    searchPanel = document.createElement('div');
-    searchPanel.id = 'search-replace-panel';
-    searchPanel.innerHTML = `
-      <div class="sr-header">
-        <h2>
-          <i class="fa-solid fa-magnifying-glass"></i>
-          搜索与替换
-        </h2>
-      </div>
-      
-      <div class="sr-content">
-        <div class="sr-input-group">
-          <label for="sr-search-input">搜索内容</label>
-          <div class="sr-input-wrapper">
+  /**
+   * 构建搜索面板的 HTML
+   */
+  function buildPanelHTML() {
+    return `
+      <div id="${PANEL_ID}" class="csr-container">
+        <!-- 搜索输入区 -->
+        <div class="csr-row">
+          <input type="text" id="${PANEL_ID}__search" class="text_pole" placeholder="搜索内容..." />
+          <button id="${PANEL_ID}__btn-search" class="menu_button" title="搜索">
             <i class="fa-solid fa-search"></i>
-            <input type="text" id="sr-search-input" placeholder="输入搜索关键词">
-          </div>
-        </div>
-        
-        <div class="sr-input-group">
-          <label for="sr-replace-input">替换内容</label>
-          <div class="sr-input-wrapper">
-            <i class="fa-solid fa-pen"></i>
-            <input type="text" id="sr-replace-input" placeholder="输入替换文本">
-          </div>
-        </div>
-        
-        <div class="sr-options">
-          <div class="sr-option">
-            <input type="checkbox" id="sr-case-sensitive" ${settings.caseSensitive ? 'checked' : ''}>
-            <label for="sr-case-sensitive">区分大小写</label>
-          </div>
-          <div class="sr-option">
-            <input type="checkbox" id="sr-whole-word" ${settings.wholeWord ? 'checked' : ''}>
-            <label for="sr-whole-word">全词匹配</label>
-          </div>
-          <div class="sr-option">
-            <input type="checkbox" id="sr-regex" ${settings.useRegex ? 'checked' : ''}>
-            <label for="sr-regex">正则表达式</label>
-          </div>
-        </div>
-        
-        <div class="sr-actions">
-          <button class="sr-btn sr-btn-primary" id="sr-search-btn">
-            <i class="fa-solid fa-search"></i>
-            搜索
           </button>
-          <button class="sr-btn sr-btn-danger" id="sr-replace-all-btn">
-            <i class="fa-solid fa-repeat"></i>
-            全部替换
+        </div>
+        
+        <!-- 替换输入区 -->
+        <div class="csr-row">
+          <input type="text" id="${PANEL_ID}__replace" class="text_pole" placeholder="替换为..." />
+          <button id="${PANEL_ID}__btn-replace-one" class="menu_button" title="替换当前">
+            <i class="fa-solid fa-arrow-right"></i>
           </button>
-          <button class="sr-btn sr-btn-secondary" id="sr-close-btn">
+          <button id="${PANEL_ID}__btn-replace-all" class="menu_button" title="全部替换">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+        
+        <!-- 选项区 -->
+        <div class="csr-row csr-options">
+          <label class="csr-checkbox">
+            <input type="checkbox" id="${PANEL_ID}__regex" />
+            <span>正则表达式</span>
+          </label>
+          <label class="csr-checkbox">
+            <input type="checkbox" id="${PANEL_ID}__case" />
+            <span>区分大小写</span>
+          </label>
+        </div>
+        
+        <!-- 结果导航 -->
+        <div class="csr-row csr-nav">
+          <button id="${PANEL_ID}__btn-prev" class="menu_button" title="上一个">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+          <span id="${PANEL_ID}__result-info" class="csr-result-info">0 / 0</span>
+          <button id="${PANEL_ID}__btn-next" class="menu_button" title="下一个">
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          <button id="${PANEL_ID}__btn-clear" class="menu_button" title="清除搜索">
             <i class="fa-solid fa-xmark"></i>
-            关闭
           </button>
         </div>
         
-        <div id="sr-stats-container"></div>
-        
-        <div id="sr-results-container"></div>
+        <!-- 结果预览区 -->
+        <div id="${PANEL_ID}__preview" class="csr-preview">
+          <p class="csr-placeholder">输入关键词后点击搜索</p>
+        </div>
       </div>
     `;
-    
-    document.body.appendChild(searchPanel);
-    
-    // 绑定事件
-    document.getElementById('sr-search-btn').addEventListener('click', performSearch);
-    document.getElementById('sr-replace-all-btn').addEventListener('click', performReplaceAll);
-    document.getElementById('sr-close-btn').addEventListener('click', closePanel);
-    document.getElementById('sr-search-input').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') performSearch();
-    });
-    
-    // 自动聚焦搜索框
-    setTimeout(() => {
-      document.getElementById('sr-search-input').focus();
-    }, 100);
   }
 
-  // 关闭面板
-  function closePanel() {
-    if (searchPanel) {
-      searchPanel.remove();
-      searchPanel = null;
-      searchResults = [];
-    }
-  }
-
-  // 执行搜索
-  async function performSearch() {
-    const searchText = document.getElementById('sr-search-input').value;
-    if (!searchText) {
-      showStats('请输入搜索内容', 'warning', 'fa-triangle-exclamation');
+  /**
+   * 执行搜索
+   */
+  async function doSearch() {
+    const searchInput = $(`#${PANEL_ID}__search`).val().trim();
+    if (!searchInput) {
+      toastr.warning("请输入搜索内容");
       return;
     }
 
-    const caseSensitive = document.getElementById('sr-case-sensitive').checked;
-    const wholeWord = document.getElementById('sr-whole-word').checked;
-    const useRegex = document.getElementById('sr-regex').checked;
+    state.isRegex = $(`#${PANEL_ID}__regex`).prop("checked");
+    state.caseSensitive = $(`#${PANEL_ID}__case`).prop("checked");
 
+    // 获取所有聊天记录
+    let chatData;
     try {
-      showStats('正在搜索...', 'info', 'fa-spinner fa-spin');
-      
-      const result = await ST_API.chatHistory.list({});
-      const messages = result.messages;
+      chatData = await ST_API.chatHistory.list();
+    } catch (err) {
+      toastr.error("获取聊天记录失败");
+      console.error(`[${MODULE_NAME}]`, err);
+      return;
+    }
 
-      searchResults = [];
-      let totalMatches = 0;
+    const messages = chatData.messages;
+    state.searchResults = [];
 
-      // 构建搜索模式
-      let pattern;
-      if (useRegex) {
-        try {
-          pattern = new RegExp(searchText, caseSensitive ? 'g' : 'gi');
-        } catch (e) {
-          showStats('正则表达式语法错误', 'error', 'fa-circle-exclamation');
-          return;
-        }
+    // 构建正则或字符串匹配
+    let regex;
+    try {
+      if (state.isRegex) {
+        const flags = state.caseSensitive ? "g" : "gi";
+        regex = new RegExp(searchInput, flags);
       } else {
-        let escapedText = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (wholeWord) {
-          escapedText = `\\b${escapedText}\\b`;
-        }
-        pattern = new RegExp(escapedText, caseSensitive ? 'g' : 'gi');
+        // 转义特殊字符
+        const escaped = searchInput.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const flags = state.caseSensitive ? "g" : "gi";
+        regex = new RegExp(escaped, flags);
+      }
+    } catch (err) {
+      toastr.error("正则表达式语法错误");
+      return;
+    }
+
+    // 遍历消息查找匹配
+    messages.forEach((msg, index) => {
+      let textContent = "";
+
+      // 提取消息文本 (Gemini 格式)
+      if (msg.parts && Array.isArray(msg.parts)) {
+        textContent = msg.parts
+          .filter((p) => p.text)
+          .map((p) => p.text)
+          .join("\n");
+      } else if (typeof msg.content === "string") {
+        // OpenAI 格式兼容
+        textContent = msg.content;
       }
 
-      // 搜索每条消息
-      messages.forEach((msg, index) => {
-        if (!('parts' in msg)) return;
+      if (!textContent) return;
 
-        const textParts = msg.parts.filter(p => 'text' in p);
-        textParts.forEach(part => {
-          const matches = part.text.match(pattern);
-          if (matches) {
-            searchResults.push({
-              index,
-              message: msg,
-              text: part.text,
-              matches: matches.length
-            });
-            totalMatches += matches.length;
-          }
+      // 重置正则状态
+      regex.lastIndex = 0;
+      const matches = [];
+      let match;
+
+      while ((match = regex.exec(textContent)) !== null) {
+        matches.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          text: match[0],
         });
-      });
+        // 防止零宽匹配死循环
+        if (match[0].length === 0) regex.lastIndex++;
+      }
 
-      // 显示结果
-      displayResults(pattern, totalMatches);
+      if (matches.length > 0) {
+        state.searchResults.push({
+          index,
+          role: msg.role,
+          name: msg.name || (msg.role === "user" ? "用户" : "角色"),
+          textContent,
+          matches,
+        });
+      }
+    });
 
-    } catch (error) {
-      console.error('[Search & Replace] 搜索失败:', error);
-      showStats('搜索失败，请重试', 'error', 'fa-circle-xmark');
+    // 更新 UI
+    state.currentResultIndex = state.searchResults.length > 0 ? 0 : -1;
+    updateResultsUI();
+
+    const totalMatches = state.searchResults.reduce(
+      (sum, r) => sum + r.matches.length,
+      0
+    );
+    if (totalMatches > 0) {
+      toastr.success(
+        `找到 ${totalMatches} 处匹配，分布在 ${state.searchResults.length} 条消息中`
+      );
+    } else {
+      toastr.info("未找到匹配内容");
     }
   }
 
-  // 显示搜索结果
-  function displayResults(pattern, totalMatches) {
-    const container = document.getElementById('sr-results-container');
-    
-    if (searchResults.length === 0) {
-      showStats('未找到匹配结果', 'warning', 'fa-circle-info');
-      container.innerHTML = `
-        <div class="sr-empty">
-          <i class="fa-solid fa-inbox"></i>
-          <p>没有找到匹配的消息</p>
-        </div>
-      `;
+  /**
+   * 更新结果显示 UI
+   */
+  function updateResultsUI() {
+    const $preview = $(`#${PANEL_ID}__preview`);
+    const $info = $(`#${PANEL_ID}__result-info`);
+
+    if (state.searchResults.length === 0) {
+      $preview.html('<p class="csr-placeholder">无搜索结果</p>');
+      $info.text("0 / 0");
       return;
     }
 
-    showStats(
-      `找到 ${searchResults.length} 条消息，共 ${totalMatches} 处匹配`, 
-      'success', 
-      'fa-circle-check'
+    $info.text(
+      `${state.currentResultIndex + 1} / ${state.searchResults.length}`
     );
 
-    let resultsHTML = `
-      <div class="sr-results">
-        <div class="sr-results-header">
-          <span class="sr-results-title">搜索结果</span>
-          <span class="sr-results-count">${searchResults.length} 条消息</span>
+    // 渲染当前结果预览
+    const current = state.searchResults[state.currentResultIndex];
+    if (!current) return;
+
+    // 高亮匹配文本
+    let highlightedText = escapeHtml(current.textContent);
+    // 从后往前替换，避免索引偏移问题
+    const sortedMatches = [...current.matches].sort((a, b) => b.start - a.start);
+
+    for (const m of sortedMatches) {
+      const before = highlightedText.substring(0, m.start);
+      const matched = highlightedText.substring(m.start, m.end);
+      const after = highlightedText.substring(m.end);
+      highlightedText = `${before}<mark class="csr-highlight">${matched}</mark>${after}`;
+    }
+
+    // 截取前后内容预览（太长的话）
+    const previewHtml = `
+      <div class="csr-result-item csr-result-active">
+        <div class="csr-result-header">
+          <span class="csr-result-role ${current.role}">${current.name}</span>
+          <span class="csr-result-index">消息 #${current.index}</span>
         </div>
+        <div class="csr-result-text">${highlightedText}</div>
+      </div>
     `;
 
-    searchResults.forEach(result => {
-      const highlightedText = result.text.replace(pattern, match => 
-        `<span class="sr-highlight">${escapeHtml(match)}</span>`
-      );
+    $preview.html(previewHtml);
 
-      let preview = highlightedText;
-      if (preview.length > 250) {
-        const firstMatch = preview.indexOf('<span class="sr-highlight">');
-        const start = Math.max(0, firstMatch - 75);
-        const end = Math.min(preview.length, firstMatch + 175);
-        preview = (start > 0 ? '...' : '') + 
-                  preview.substring(start, end) + 
-                  (end < preview.length ? '...' : '');
-      }
-
-      resultsHTML += `
-        <div class="sr-result-item">
-          <div class="sr-result-header">
-            <div class="sr-result-meta">
-              <span class="sr-result-index">#${result.index}</span>
-              <span class="sr-result-role ${result.message.role}">${result.message.role}</span>
-            </div>
-            <span class="sr-result-matches">${result.matches} 处匹配</span>
-          </div>
-          <div class="sr-result-preview">${preview}</div>
-        </div>
-      `;
-    });
-
-    resultsHTML += '</div>';
-    container.innerHTML = resultsHTML;
+    // 滚动到对应消息（可选）
+    scrollToMessage(current.index);
   }
 
-  // 执行全部替换
-  async function performReplaceAll() {
-    const searchText = document.getElementById('sr-search-input').value;
-    const replaceText = document.getElementById('sr-replace-input').value;
+  /**
+   * 滚动到指定消息
+   */
+  function scrollToMessage(index) {
+    const $chat = $("#chat");
+    const $messages = $chat.find(".mes");
+    if ($messages.length > index) {
+      const $target = $messages.eq(index);
+      $target[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      // 闪烁高亮
+      $target.addClass("csr-flash");
+      setTimeout(() => $target.removeClass("csr-flash"), 1500);
+    }
+  }
 
-    if (!searchText) {
-      showStats('请先执行搜索', 'warning', 'fa-triangle-exclamation');
+  /**
+   * 替换当前匹配
+   */
+  async function replaceOne() {
+    if (state.currentResultIndex < 0 || state.searchResults.length === 0) {
+      toastr.warning("没有可替换的内容");
       return;
     }
 
-    if (searchResults.length === 0) {
-      showStats('没有可替换的内容', 'warning', 'fa-circle-info');
-      return;
-    }
+    const replaceWith = $(`#${PANEL_ID}__replace`).val();
+    const current = state.searchResults[state.currentResultIndex];
 
-    if (settings.confirmReplace && !confirm(`确定要替换 ${searchResults.length} 条消息中的内容吗？此操作不可撤销。`)) {
-      return;
-    }
-
-    const caseSensitive = document.getElementById('sr-case-sensitive').checked;
-    const wholeWord = document.getElementById('sr-whole-word').checked;
-    const useRegex = document.getElementById('sr-regex').checked;
-
+    // 获取原始消息
+    let msgData;
     try {
-      showStats('正在替换...', 'info', 'fa-spinner fa-spin');
+      msgData = await ST_API.chatHistory.get({ index: current.index });
+    } catch (err) {
+      toastr.error("获取消息失败");
+      return;
+    }
 
-      let pattern;
-      if (useRegex) {
-        pattern = new RegExp(searchText, caseSensitive ? 'g' : 'gi');
-      } else {
-        let escapedText = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (wholeWord) {
-          escapedText = `\\b${escapedText}\\b`;
+    const msg = msgData.message;
+    let newContent;
+
+    // 构建新内容
+    if (msg.parts && Array.isArray(msg.parts)) {
+      // Gemini 格式：只替换 text 部分
+      newContent = msg.parts.map((p) => {
+        if (p.text) {
+          return { ...p, text: replaceText(p.text, replaceWith) };
         }
-        pattern = new RegExp(escapedText, caseSensitive ? 'g' : 'gi');
+        return p;
+      });
+    } else {
+      // 纯文本
+      newContent = replaceText(current.textContent, replaceWith);
+    }
+
+    // 更新消息
+    try {
+      await ST_API.chatHistory.update({
+        index: current.index,
+        content: newContent,
+      });
+      toastr.success(`已替换消息 #${current.index} 中的匹配内容`);
+
+      // 刷新聊天界面
+      await ST_API.ui.reloadChat();
+
+      // 移除当前结果并继续
+      state.searchResults.splice(state.currentResultIndex, 1);
+      if (state.currentResultIndex >= state.searchResults.length) {
+        state.currentResultIndex = Math.max(0, state.searchResults.length - 1);
       }
+      updateResultsUI();
+    } catch (err) {
+      toastr.error("替换失败");
+      console.error(`[${MODULE_NAME}]`, err);
+    }
+  }
 
-      let replacedCount = 0;
+  /**
+   * 全部替换
+   */
+  async function replaceAll() {
+    if (state.searchResults.length === 0) {
+      toastr.warning("没有可替换的内容");
+      return;
+    }
 
-      for (const result of searchResults) {
-        const newParts = result.message.parts.map(part => {
-          if ('text' in part) {
-            return { text: part.text.replace(pattern, replaceText) };
-          }
-          return part;
-        });
+    const replaceWith = $(`#${PANEL_ID}__replace`).val();
+    let successCount = 0;
+    let failCount = 0;
+
+    // 从后往前替换，避免索引变化问题
+    const sortedResults = [...state.searchResults].sort(
+      (a, b) => b.index - a.index
+    );
+
+    for (const result of sortedResults) {
+      try {
+        const msgData = await ST_API.chatHistory.get({ index: result.index });
+        const msg = msgData.message;
+        let newContent;
+
+        if (msg.parts && Array.isArray(msg.parts)) {
+          newContent = msg.parts.map((p) => {
+            if (p.text) {
+              return { ...p, text: replaceText(p.text, replaceWith) };
+            }
+            return p;
+          });
+        } else {
+          newContent = replaceText(result.textContent, replaceWith);
+        }
 
         await ST_API.chatHistory.update({
           index: result.index,
-          content: newParts
+          content: newContent,
         });
-
-        replacedCount++;
+        successCount++;
+      } catch (err) {
+        failCount++;
+        console.error(`[${MODULE_NAME}] 替换消息 #${result.index} 失败:`, err);
       }
+    }
 
-      showStats(
-        `成功替换 ${replacedCount} 条消息`, 
-        'success', 
-        'fa-circle-check'
-      );
-      
-      // 清空结果
-      searchResults = [];
-      document.getElementById('sr-results-container').innerHTML = '';
+    // 刷新聊天界面
+    await ST_API.ui.reloadChat();
 
-    } catch (error) {
-      console.error('[Search & Replace] 替换失败:', error);
-      showStats('替换失败，请重试', 'error', 'fa-circle-xmark');
+    // 清空结果
+    state.searchResults = [];
+    state.currentResultIndex = -1;
+    updateResultsUI();
+
+    if (failCount === 0) {
+      toastr.success(`成功替换 ${successCount} 条消息`);
+    } else {
+      toastr.warning(`替换完成：成功 ${successCount}，失败 ${failCount}`);
     }
   }
 
-  // 显示统计信息
-  function showStats(message, type = 'info', icon = 'fa-circle-info') {
-    const container = document.getElementById('sr-stats-container');
-    container.innerHTML = `
-      <div class="sr-stats ${type}">
-        <i class="fa-solid ${icon}"></i>
-        <span>${message}</span>
-      </div>
-    `;
+  /**
+   * 替换文本工具函数
+   */
+  function replaceText(text, replaceWith) {
+    const searchInput = $(`#${PANEL_ID}__search`).val();
+    let regex;
+
+    if (state.isRegex) {
+      const flags = state.caseSensitive ? "g" : "gi";
+      regex = new RegExp(searchInput, flags);
+    } else {
+      const escaped = searchInput.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const flags = state.caseSensitive ? "g" : "gi";
+      regex = new RegExp(escaped, flags);
+    }
+
+    return text.replace(regex, replaceWith);
   }
 
-  // HTML转义
+  /**
+   * HTML 转义
+   */
   function escapeHtml(text) {
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }
 
-  // 等待 ST_API 加载
-  if (typeof ST_API !== 'undefined') {
-    init();
-  } else {
-    const checkAPI = setInterval(() => {
-      if (typeof ST_API !== 'undefined') {
-        clearInterval(checkAPI);
-        init();
-      }
-    }, 100);
+  /**
+   * 导航到上一个结果
+   */
+  function goToPrev() {
+    if (state.searchResults.length === 0) return;
+    state.currentResultIndex =
+      (state.currentResultIndex - 1 + state.searchResults.length) %
+      state.searchResults.length;
+    updateResultsUI();
   }
 
+  /**
+   * 导航到下一个结果
+   */
+  function goToNext() {
+    if (state.searchResults.length === 0) return;
+    state.currentResultIndex =
+      (state.currentResultIndex + 1) % state.searchResults.length;
+    updateResultsUI();
+  }
+
+  /**
+   * 清除搜索
+   */
+  function clearSearch() {
+    state.searchResults = [];
+    state.currentResultIndex = -1;
+    $(`#${PANEL_ID}__search`).val("");
+    $(`#${PANEL_ID}__replace`).val("");
+    $(`#${PANEL_ID}__preview`).html(
+      '<p class="csr-placeholder">输入关键词后点击搜索</p>'
+    );
+    $(`#${PANEL_ID}__result-info`).text("0 / 0");
+  }
+
+  /**
+   * 绑定事件
+   */
+  function bindEvents() {
+    // 搜索按钮
+    $(`#${PANEL_ID}__btn-search`).on("click", doSearch);
+
+    // 回车搜索
+    $(`#${PANEL_ID}__search`).on("keydown", (e) => {
+      if (e.key === "Enter") doSearch();
+    });
+
+    // 替换按钮
+    $(`#${PANEL_ID}__btn-replace-one`).on("click", replaceOne);
+    $(`#${PANEL_ID}__btn-replace-all`).on("click", replaceAll);
+
+    // 导航按钮
+    $(`#${PANEL_ID}__btn-prev`).on("click", goToPrev);
+    $(`#${PANEL_ID}__btn-next`).on("click", goToNext);
+    $(`#${PANEL_ID}__btn-clear`).on("click", clearSearch);
+  }
+
+  /**
+   * 注册设置面板
+   */
+  async function registerPanel() {
+    try {
+      await ST_API.ui.registerSettingsPanel({
+        id: `${PANEL_ID}.settings`,
+        title: "🔍 搜索与替换",
+        target: "left", // 放在左侧扩展栏
+        expanded: false,
+        content: {
+          kind: "html",
+          html: buildPanelHTML(),
+        },
+      });
+
+      bindEvents();
+      console.log(`[${MODULE_NAME}] 面板注册成功`);
+    } catch (err) {
+      console.error(`[${MODULE_NAME}] 面板注册失败:`, err);
+    }
+  }
+
+  // 等待 APP_READY 再初始化
+  eventSource.on(event_types.APP_READY, () => {
+    registerPanel();
+  });
+
+  // 聊天切换时清空搜索结果
+  eventSource.on(event_types.CHAT_CHANGED, () => {
+    clearSearch();
+  });
 })();
