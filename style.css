@@ -5,16 +5,25 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 9999;
+  
+  /* 修复：使用极大值确保在所有遮罩层之上 */
+  z-index: 2147483647; 
+  
   width: 420px;
   max-width: 90vw;
   max-height: 80vh;
-  background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.9));
+  
+  /* 修复：确保背景不透明，且允许交互 */
+  background: var(--SmartThemeBlurTintColor, rgba(20, 20, 20, 0.95));
   backdrop-filter: blur(12px);
+  pointer-events: auto; 
+  
   border: 1px solid var(--SmartThemeBorderColor);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.8); /* 加深阴影突出层级 */
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .csr-header {
@@ -22,15 +31,16 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: var(--SmartThemeBlurTintColor);
+  background: rgba(0, 0, 0, 0.3);
   border-bottom: 1px solid var(--SmartThemeBorderColor);
-  cursor: move;
+  flex-shrink: 0;
 }
 
 .csr-title {
   font-size: 1.1em;
   font-weight: bold;
   color: var(--SmartThemeBodyColor);
+  user-select: none;
 }
 
 .csr-close-btn {
@@ -38,157 +48,123 @@
   border: none;
   color: var(--SmartThemeBodyColor);
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  opacity: 0.7;
-  transition: opacity 0.2s;
+  padding: 4px;
+  min-width: 30px;
+  font-size: 18px;
+  opacity: 0.8;
 }
 
 .csr-close-btn:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
+  color: #ff6b6b;
 }
 
 .csr-body {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  overflow-y: auto;
 }
 
 .csr-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
+/* 修复：强制输入框可点击和可见 */
 .csr-row .text_pole {
   flex: 1;
   min-width: 0;
+  height: 38px !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 2147483647;
 }
 
 .csr-options {
   gap: 16px;
+  padding: 4px 0;
 }
 
 .csr-checkbox {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   cursor: pointer;
-  font-size: 0.9em;
+  font-size: 0.95em;
   color: var(--SmartThemeBodyColor);
+  user-select: none;
 }
 
-.csr-checkbox input[type="checkbox"] {
-  margin: 0;
+.csr-checkbox input {
+  width: 16px;
+  height: 16px;
   cursor: pointer;
 }
 
 .csr-nav {
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
+  margin-top: 4px;
 }
 
 .csr-result-info {
   min-width: 70px;
   text-align: center;
-  font-size: 0.95em;
+  font-size: 1em;
   color: var(--SmartThemeBodyColor);
-  font-weight: 500;
+  font-weight: bold;
 }
 
 /* 预览区域 */
 .csr-preview {
-  max-height: 180px;
+  min-height: 80px;
+  max-height: 200px;
   overflow-y: auto;
   border: 1px solid var(--SmartThemeBorderColor);
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
   background: rgba(0, 0, 0, 0.2);
+  margin-top: 4px;
 }
 
 .csr-placeholder {
   color: var(--SmartThemeBodyColor);
   opacity: 0.5;
   text-align: center;
-  margin: 0;
-  font-size: 0.9em;
-}
-
-.csr-result-item {
-  padding: 8px;
+  margin-top: 20px;
 }
 
 .csr-result-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   margin-bottom: 8px;
-  font-size: 0.85em;
-}
-
-.csr-result-role {
-  font-weight: bold;
-  padding: 3px 8px;
-  border-radius: 4px;
-}
-
-.csr-result-role.user {
-  background: rgba(100, 150, 255, 0.3);
-}
-
-.csr-result-role.model {
-  background: rgba(100, 255, 150, 0.2);
-}
-
-.csr-result-index {
-  color: var(--SmartThemeBodyColor);
-  opacity: 0.6;
+  font-size: 0.9em;
+  opacity: 0.8;
 }
 
 .csr-result-text {
-  font-size: 0.9em;
+  font-size: 0.95em;
   line-height: 1.6;
-  word-break: break-word;
   white-space: pre-wrap;
-  max-height: 100px;
-  overflow-y: auto;
-  color: var(--SmartThemeBodyColor);
+  word-break: break-word;
 }
 
-/* 高亮匹配文本 */
 .csr-highlight {
-  background: rgba(255, 200, 0, 0.6);
-  color: #000;
-  padding: 1px 3px;
-  border-radius: 3px;
-  font-weight: 500;
+  background: #ffcc00;
+  color: black;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-weight: bold;
 }
 
-/* 消息闪烁高亮 */
-.csr-flash {
-  animation: csr-flash-anim 1.5s ease-out;
-}
-
-@keyframes csr-flash-anim {
-  0%, 30% {
-    box-shadow: 0 0 0 4px var(--SmartThemeQuoteColor, #ffcc00);
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-}
-
-/* 按钮样式 */
-.csr-row .menu_button {
-  padding: 6px 12px;
-  min-width: 38px;
+/* 按钮统一 */
+.csr-btn {
+  height: 38px;
+  min-width: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.csr-row .menu_button i {
-  font-size: 14px;
 }
