@@ -1,0 +1,10 @@
+{
+  "name": "Chat Search & Replace",
+  "display_name": "聊天记录搜索替换",
+  "version": "2.0.0",
+  "author": "Your Name",
+  "description": "在聊天记录中搜索文本并支持批量替换",
+  "requires": [],
+  "js": "index.js",
+  "css": "style.css"
+}
