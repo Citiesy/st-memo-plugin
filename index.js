@@ -1,7 +1,6 @@
 (function () {
   const MODULE_NAME = "st-memo-plugin";
   const PANEL_ID = "st-memo-drawer";
-  const TOGGLE_ID = "st-memo-toggle";
   const STORAGE_KEY = "st_memo_plugin_data";
 
   const ctx = SillyTavern.getContext();
@@ -13,31 +12,24 @@
       const data = localStorage.getItem(STORAGE_KEY);
       return data ? JSON.parse(data) : [];
     } catch (e) {
-      console.error(`[${MODULE_NAME}] 加载备忘录失败:`, e);
+      console.error(`[${MODULE_NAME}] 加载失败:`, e);
       return [];
     }
   }
 
   function saveMemos(memos) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(memos));
-    } catch (e) {
-      console.error(`[${MODULE_NAME}] 保存备忘录失败:`, e);
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(memos));
   }
 
   function addMemo(title, content) {
     const memos = loadMemos();
-    const newMemo = {
+    memos.unshift({
       id: Date.now(),
       title: title.trim(),
       content: content.trim(),
-      createdAt: new Date().toLocaleString(),
       updatedAt: new Date().toLocaleString(),
-    };
-    memos.unshift(newMemo);
+    });
     saveMemos(memos);
-    return newMemo;
   }
 
   function updateMemo(id, title, content) {
@@ -49,45 +41,17 @@
       memo.updatedAt = new Date().toLocaleString();
       saveMemos(memos);
     }
-    return memo;
   }
 
   function deleteMemo(id) {
-    let memos = loadMemos();
-    memos = memos.filter((m) => m.id !== id);
+    const memos = loadMemos().filter((m) => m.id !== id);
     saveMemos(memos);
   }
 
   function getMemoByTitle(title) {
-    const memos = loadMemos();
-    const searchTitle = title.trim().toLowerCase();
-    return memos.find((m) => m.title.toLowerCase() === searchTitle);
-  }
-
-  function searchMemos(keyword) {
-    const memos = loadMemos();
-    const kw = keyword.trim().toLowerCase();
-    return memos.filter(
-      (m) =>
-        m.title.toLowerCase().includes(kw) ||
-        m.content.toLowerCase().includes(kw)
+    return loadMemos().find(
+      (m) => m.title.toLowerCase() === title.trim().toLowerCase()
     );
-  }
-
-  // ============ 打开/关闭面板 ============
-  function openDrawer() {
-    const drawer = document.getElementById(PANEL_ID);
-    if (drawer) {
-      drawer.classList.add("open");
-      renderMemoList();
-    }
-  }
-
-  function closeDrawer() {
-    const drawer = document.getElementById(PANEL_ID);
-    if (drawer) {
-      drawer.classList.remove("open");
-    }
   }
 
   // ============ 斜杠命令 ============
@@ -101,6 +65,19 @@
       },
       [],
       "- 打开备忘录面板",
+      false,
+      true
+    );
+
+    // /memo-close - 关闭备忘录面板
+    registerSlashCommand(
+      "memo-close",
+      () => {
+        closeDrawer();
+        return "";
+      },
+      [],
+      "- 关闭备忘录面板",
       false,
       true
     );
@@ -120,8 +97,7 @@
           toastr.error(`找不到备忘录: ${title}`);
           const memos = loadMemos();
           if (memos.length > 0) {
-            const titles = memos.map((m) => m.title).join(", ");
-            toastr.info(`可用备忘录: ${titles}`);
+            toastr.info(`可用: ${memos.map((m) => m.title).join(", ")}`);
           }
           return "";
         }
@@ -130,22 +106,25 @@
         return memo.content;
       },
       [],
-      "<标题> - 插入指定标题的备忘录内容",
+      "<标题> - 插入备忘录内容",
       true,
       true
     );
 
-    // /memo-list - 列出所有备忘录标题
+    // /memo-list - 列出所有备忘录
     registerSlashCommand(
       "memo-list",
       () => {
         const memos = loadMemos();
         if (memos.length === 0) {
           toastr.info("暂无备忘录");
-          return "";
+        } else {
+          toastr.info(
+            `备忘录列表:\n${memos.map((m) => `• ${m.title}`).join("\n")}`,
+            "",
+            { timeOut: 8000 }
+          );
         }
-        const list = memos.map((m) => `• ${m.title}`).join("\n");
-        toastr.info(`备忘录列表:\n${list}`, "", { timeOut: 5000 });
         return "";
       },
       [],
@@ -154,7 +133,7 @@
       true
     );
 
-    // /memo-add 标题::内容 - 快速添加备忘录
+    // /memo-add 标题::内容 - 快速添加
     registerSlashCommand(
       "memo-add",
       (args, value) => {
@@ -177,7 +156,7 @@
         }
 
         addMemo(title, content);
-        toastr.success(`已添加备忘录: ${title}`);
+        toastr.success(`已添加: ${title}`);
         return "";
       },
       [],
@@ -186,14 +165,70 @@
       true
     );
 
-    console.log(`[${MODULE_NAME}] 斜杠命令已注册: /memo-open, /memo, /memo-list, /memo-add`);
+    // /memo-del 标题 - 删除备忘录
+    registerSlashCommand(
+      "memo-del",
+      (args, value) => {
+        const title = value?.trim();
+        if (!title) {
+          toastr.warning("用法: /memo-del 标题");
+          return "";
+        }
+
+        const memo = getMemoByTitle(title);
+        if (!memo) {
+          toastr.error(`找不到备忘录: ${title}`);
+          return "";
+        }
+
+        deleteMemo(memo.id);
+        toastr.success(`已删除: ${title}`);
+        return "";
+      },
+      [],
+      "<标题> - 删除指定备忘录",
+      false,
+      true
+    );
+
+    console.log(`[${MODULE_NAME}] 命令已注册: /memo-open, /memo-close, /memo, /memo-list, /memo-add, /memo-del`);
   }
 
-  // ============ UI 渲染 ============
+  // ============ UI ============
   function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function insertToTextarea(text) {
+    const textarea = document.getElementById("send_textarea");
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value =
+        textarea.value.substring(0, start) +
+        text +
+        textarea.value.substring(end);
+      textarea.selectionStart = textarea.selectionEnd = start + text.length;
+      textarea.focus();
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
+  function openDrawer() {
+    const drawer = document.getElementById(PANEL_ID);
+    if (drawer) {
+      drawer.classList.add("open");
+      renderMemoList();
+    }
+  }
+
+  function closeDrawer() {
+    const drawer = document.getElementById(PANEL_ID);
+    if (drawer) {
+      drawer.classList.remove("open");
+    }
   }
 
   function renderMemoList() {
@@ -203,7 +238,7 @@
     const memos = loadMemos();
 
     if (memos.length === 0) {
-      listEl.innerHTML = `<div class="memo-empty">暂无备忘录<br><small>点击上方添加</small></div>`;
+      listEl.innerHTML = `<div class="memo-empty">暂无备忘录<br><small>/memo-add 标题::内容</small></div>`;
       return;
     }
 
@@ -214,23 +249,15 @@
         <div class="memo-item-header">
           <span class="memo-title">${escapeHtml(memo.title)}</span>
           <div class="memo-item-actions">
-            <button class="memo-btn memo-insert" title="插入到输入框">
-              <i class="fa-solid fa-arrow-right-to-bracket"></i>
-            </button>
-            <button class="memo-btn memo-edit" title="编辑">
-              <i class="fa-solid fa-pen"></i>
-            </button>
-            <button class="memo-btn memo-copy" title="复制内容">
-              <i class="fa-solid fa-copy"></i>
-            </button>
-            <button class="memo-btn memo-delete" title="删除">
-              <i class="fa-solid fa-trash"></i>
-            </button>
+            <button class="memo-btn memo-insert" title="插入"><i class="fa-solid fa-arrow-right-to-bracket"></i></button>
+            <button class="memo-btn memo-edit" title="编辑"><i class="fa-solid fa-pen"></i></button>
+            <button class="memo-btn memo-copy" title="复制"><i class="fa-solid fa-copy"></i></button>
+            <button class="memo-btn memo-delete" title="删除"><i class="fa-solid fa-trash"></i></button>
           </div>
         </div>
         <div class="memo-content-preview">${escapeHtml(
-          memo.content.length > 100
-            ? memo.content.substring(0, 100) + "..."
+          memo.content.length > 80
+            ? memo.content.substring(0, 80) + "..."
             : memo.content
         )}</div>
         <div class="memo-time">${memo.updatedAt}</div>
@@ -261,13 +288,13 @@
         e.stopPropagation();
         if (memo) {
           navigator.clipboard.writeText(memo.content);
-          toastr.success("已复制内容");
+          toastr.success("已复制");
         }
       });
 
       item.querySelector(".memo-delete")?.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (confirm(`确定删除「${memo?.title}」吗？`)) {
+        if (confirm(`删除「${memo?.title}」？`)) {
           deleteMemo(id);
           renderMemoList();
           toastr.info("已删除");
@@ -281,8 +308,8 @@
           preview.innerHTML = escapeHtml(
             isExpanded
               ? memo.content
-              : memo.content.length > 100
-              ? memo.content.substring(0, 100) + "..."
+              : memo.content.length > 80
+              ? memo.content.substring(0, 80) + "..."
               : memo.content
           );
         }
@@ -290,274 +317,131 @@
     });
   }
 
-  function insertToTextarea(text) {
-    const textarea = document.getElementById("send_textarea");
-    if (textarea) {
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const before = textarea.value.substring(0, start);
-      const after = textarea.value.substring(end);
-      textarea.value = before + text + after;
-      textarea.selectionStart = textarea.selectionEnd = start + text.length;
-      textarea.focus();
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-  }
-
   function openEditForm(id = null) {
     const formEl = document.querySelector(`#${PANEL_ID} .memo-form`);
     const titleInput = document.querySelector(`#${PANEL_ID} .memo-form-title`);
     const contentInput = document.querySelector(`#${PANEL_ID} .memo-form-content`);
     const submitBtn = document.querySelector(`#${PANEL_ID} .memo-form-submit`);
-    const cancelBtn = document.querySelector(`#${PANEL_ID} .memo-form-cancel`);
 
-    if (!formEl || !titleInput || !contentInput || !submitBtn) return;
+    if (!formEl) return;
 
     if (id) {
-      const memos = loadMemos();
-      const memo = memos.find((m) => m.id === id);
+      const memo = loadMemos().find((m) => m.id === id);
       if (memo) {
         titleInput.value = memo.title;
         contentInput.value = memo.content;
-        submitBtn.textContent = "保存修改";
+        submitBtn.textContent = "保存";
         submitBtn.dataset.editId = id;
       }
     } else {
       titleInput.value = "";
       contentInput.value = "";
-      submitBtn.textContent = "添加备忘";
+      submitBtn.textContent = "添加";
       delete submitBtn.dataset.editId;
     }
 
     formEl.classList.add("show");
-    cancelBtn.classList.add("show");
     titleInput.focus();
   }
 
   function closeEditForm() {
     const formEl = document.querySelector(`#${PANEL_ID} .memo-form`);
-    const cancelBtn = document.querySelector(`#${PANEL_ID} .memo-form-cancel`);
     if (formEl) formEl.classList.remove("show");
-    if (cancelBtn) cancelBtn.classList.remove("show");
   }
 
-  // ============ 创建抽屉面板 ============
   function createDrawer() {
     if (document.getElementById(PANEL_ID)) return;
 
-    // 右侧触发按钮
-    const toggleHtml = `
-      <div id="${TOGGLE_ID}" class="memo-toggle" title="备忘录">
-        <span>备</span>
-        <span>忘</span>
-        <span>录</span>
-      </div>
-    `;
-
-    // 侧边抽屉面板
-    const drawerHtml = `
+    const html = `
       <div id="${PANEL_ID}" class="memo-drawer">
         <div class="memo-drawer-header">
           <h3><i class="fa-solid fa-note-sticky"></i> 备忘录</h3>
-          <button class="memo-drawer-close" title="关闭">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
+          <button class="memo-drawer-close"><i class="fa-solid fa-xmark"></i></button>
         </div>
-
         <div class="memo-drawer-body">
-          <!-- 添加表单 -->
           <div class="memo-form">
-            <input type="text" class="memo-form-title text_pole" placeholder="标题（用于 /memo 标题 快速插入）" maxlength="50">
-            <textarea class="memo-form-content text_pole" placeholder="内容..." rows="4"></textarea>
+            <input type="text" class="memo-form-title text_pole" placeholder="标题" maxlength="50">
+            <textarea class="memo-form-content text_pole" placeholder="内容..." rows="3"></textarea>
             <div class="memo-form-actions">
               <button class="menu_button memo-form-cancel">取消</button>
-              <button class="menu_button memo-form-submit">添加备忘</button>
+              <button class="menu_button memo-form-submit">添加</button>
             </div>
           </div>
-
-          <!-- 添加按钮 -->
-          <button class="menu_button memo-add-trigger">
-            <i class="fa-solid fa-plus"></i> 添加备忘录
-          </button>
-
-          <!-- 搜索框 -->
-          <div class="memo-search">
-            <input type="text" class="memo-search-input text_pole" placeholder="搜索备忘录...">
-          </div>
-
-          <!-- 备忘列表 -->
+          <button class="menu_button memo-add-trigger"><i class="fa-solid fa-plus"></i> 添加</button>
+          <input type="text" class="memo-search text_pole" placeholder="搜索...">
           <div class="memo-list"></div>
         </div>
-
         <div class="memo-drawer-footer">
-          <small>提示: 输入 <code>/memo 标题</code> 快速插入内容</small>
+          <small><code>/memo 标题</code> 快速插入</small>
         </div>
       </div>
     `;
 
-    document.body.insertAdjacentHTML("beforeend", toggleHtml);
-    document.body.insertAdjacentHTML("beforeend", drawerHtml);
+    document.body.insertAdjacentHTML("beforeend", html);
 
-    // 绑定事件
-    const toggle = document.getElementById(TOGGLE_ID);
     const drawer = document.getElementById(PANEL_ID);
     const closeBtn = drawer.querySelector(".memo-drawer-close");
     const addTrigger = drawer.querySelector(".memo-add-trigger");
     const submitBtn = drawer.querySelector(".memo-form-submit");
     const cancelBtn = drawer.querySelector(".memo-form-cancel");
-    const searchInput = drawer.querySelector(".memo-search-input");
-
-    // 打开/关闭抽屉
-    toggle.addEventListener("click", () => {
-      drawer.classList.toggle("open");
-      if (drawer.classList.contains("open")) {
-        renderMemoList();
-      }
-    });
+    const searchInput = drawer.querySelector(".memo-search");
+    const titleInput = drawer.querySelector(".memo-form-title");
+    const contentInput = drawer.querySelector(".memo-form-content");
 
     closeBtn.addEventListener("click", closeDrawer);
 
-    // 点击外部关闭
-    document.addEventListener("click", (e) => {
-      if (
-        drawer.classList.contains("open") &&
-        !drawer.contains(e.target) &&
-        !toggle.contains(e.target)
-      ) {
-        closeDrawer();
-      }
-    });
+    addTrigger.addEventListener("click", () => openEditForm());
 
-    // 添加按钮
-    addTrigger.addEventListener("click", () => {
-      openEditForm();
-    });
+    cancelBtn.addEventListener("click", closeEditForm);
 
-    // 取消编辑
-    cancelBtn.addEventListener("click", () => {
-      closeEditForm();
-    });
-
-    // 提交表单
     submitBtn.addEventListener("click", () => {
-      const titleInput = drawer.querySelector(".memo-form-title");
-      const contentInput = drawer.querySelector(".memo-form-content");
       const title = titleInput.value.trim();
       const content = contentInput.value.trim();
 
-      if (!title) {
-        toastr.warning("请输入标题");
-        titleInput.focus();
-        return;
-      }
-      if (!content) {
-        toastr.warning("请输入内容");
-        contentInput.focus();
+      if (!title || !content) {
+        toastr.warning("标题和内容不能为空");
         return;
       }
 
       const editId = submitBtn.dataset.editId;
       if (editId) {
         updateMemo(parseInt(editId, 10), title, content);
-        toastr.success("已更新备忘录");
-        delete submitBtn.dataset.editId;
+        toastr.success("已更新");
       } else {
         if (getMemoByTitle(title)) {
-          toastr.warning("已存在同名备忘录，请更换标题");
-          titleInput.focus();
+          toastr.warning("标题已存在");
           return;
         }
         addMemo(title, content);
-        toastr.success("已添加备忘录");
+        toastr.success("已添加");
       }
 
-      titleInput.value = "";
-      contentInput.value = "";
       closeEditForm();
       renderMemoList();
     });
 
-    // 搜索
-    let searchTimer;
+    let timer;
     searchInput.addEventListener("input", () => {
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
-        const keyword = searchInput.value.trim();
-        if (keyword) {
-          renderFilteredList(keyword);
-        } else {
-          renderMemoList();
-        }
-      }, 300);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const kw = searchInput.value.trim().toLowerCase();
+        const items = drawer.querySelectorAll(".memo-item");
+        items.forEach((item) => {
+          const title = item.querySelector(".memo-title")?.textContent.toLowerCase() || "";
+          const content = item.querySelector(".memo-content-preview")?.textContent.toLowerCase() || "";
+          item.style.display = title.includes(kw) || content.includes(kw) ? "" : "none";
+        });
+      }, 200);
     });
 
-    console.log(`[${MODULE_NAME}] 抽屉面板已创建`);
-  }
-
-  function renderFilteredList(keyword) {
-    const listEl = document.querySelector(`#${PANEL_ID} .memo-list`);
-    if (!listEl) return;
-
-    const filtered = searchMemos(keyword);
-
-    if (filtered.length === 0) {
-      listEl.innerHTML = `<div class="memo-empty">未找到匹配的备忘录</div>`;
-      return;
-    }
-
-    listEl.innerHTML = filtered
-      .map(
-        (memo) => `
-      <div class="memo-item" data-id="${memo.id}">
-        <div class="memo-item-header">
-          <span class="memo-title">${escapeHtml(memo.title)}</span>
-          <div class="memo-item-actions">
-            <button class="memo-btn memo-insert" title="插入到输入框">
-              <i class="fa-solid fa-arrow-right-to-bracket"></i>
-            </button>
-            <button class="memo-btn memo-copy" title="复制内容">
-              <i class="fa-solid fa-copy"></i>
-            </button>
-          </div>
-        </div>
-        <div class="memo-content-preview">${escapeHtml(
-          memo.content.length > 100
-            ? memo.content.substring(0, 100) + "..."
-            : memo.content
-        )}</div>
-      </div>
-    `
-      )
-      .join("");
-
-    listEl.querySelectorAll(".memo-item").forEach((item) => {
-      const id = parseInt(item.dataset.id, 10);
-      const memo = filtered.find((m) => m.id === id);
-
-      item.querySelector(".memo-insert")?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (memo) {
-          insertToTextarea(memo.content);
-          toastr.success(`已插入: ${memo.title}`);
-        }
-      });
-
-      item.querySelector(".memo-copy")?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (memo) {
-          navigator.clipboard.writeText(memo.content);
-          toastr.success("已复制内容");
-        }
-      });
-    });
+    console.log(`[${MODULE_NAME}] 面板已创建`);
   }
 
   // ============ 初始化 ============
   function init() {
     createDrawer();
     registerCommands();
-    console.log(`[${MODULE_NAME}] 插件已加载`);
-    console.log(`[${MODULE_NAME}] 可用命令: /memo-open, /memo <标题>, /memo-list, /memo-add <标题::内容>`);
+    console.log(`[${MODULE_NAME}] 已加载，输入 /memo-open 打开面板`);
   }
 
   if (eventSource && event_types?.APP_READY) {
