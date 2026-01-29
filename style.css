@@ -1,225 +1,187 @@
-/* ============ 侧边抽屉 ============ */
+/* 抽屉容器 */
 .memo-drawer {
-  position: fixed;
-  top: 0;
-  right: -320px;
-  width: 300px;
-  height: 100%;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  background: var(--SmartThemeBlurTintColor, #1a1a2e);
-  border-left: 1px solid var(--SmartThemeBorderColor, #444);
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
-  transition: right 0.3s ease;
-  backdrop-filter: blur(12px);
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 320px !important;
+  max-width: 100vw !important;
+  height: 100% !important;
+  z-index: 99999 !important;
+  display: none;
+  flex-direction: column !important;
+  background: var(--SmartThemeBlurTintColor, #1e1e2e) !important;
+  border-left: 1px solid var(--SmartThemeBorderColor, #444) !important;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5) !important;
+  transform: translateX(100%);
+  transition: transform 0.3s ease !important;
 }
 
 .memo-drawer.open {
-  right: 0;
+  transform: translateX(0) !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 500px) {
   .memo-drawer {
-    width: 100%;
-    right: -100%;
+    width: 100% !important;
   }
 }
 
-/* ============ 头部 ============ */
-.memo-drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--SmartThemeBorderColor, #444);
+/* 头部 */
+.memo-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 14px 16px !important;
+  font-size: 1.1em !important;
+  font-weight: bold !important;
+  border-bottom: 1px solid var(--SmartThemeBorderColor, #444) !important;
+  color: var(--SmartThemeBodyColor, #fff) !important;
+  background: rgba(0,0,0,0.2) !important;
 }
 
-.memo-drawer-header h3 {
-  margin: 0;
-  font-size: 1em;
-  color: var(--SmartThemeBodyColor, #fff);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+#memo-close-btn {
+  background: none !important;
+  border: none !important;
+  font-size: 1.3em !important;
+  cursor: pointer !important;
+  color: var(--SmartThemeBodyColor, #fff) !important;
+  padding: 4px 10px !important;
 }
 
-.memo-drawer-close {
-  background: none;
-  border: none;
-  color: var(--SmartThemeBodyColor, #fff);
-  font-size: 1.2em;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.memo-drawer-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-/* ============ 内容区 ============ */
-.memo-drawer-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* ============ 表单 ============ */
+/* 表单 */
 .memo-form {
-  display: none;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--SmartThemeBorderColor, #444);
-  border-radius: 8px;
+  flex-direction: column !important;
+  gap: 10px !important;
+  padding: 12px !important;
+  margin: 10px 12px !important;
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid var(--SmartThemeBorderColor, #444) !important;
+  border-radius: 8px !important;
 }
 
-.memo-form.show {
-  display: flex;
+#memo-input-title,
+#memo-input-content,
+#memo-search {
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-.memo-form-title,
-.memo-form-content,
-.memo-search {
-  width: 100%;
-  box-sizing: border-box;
+#memo-input-content {
+  resize: vertical !important;
+  min-height: 80px !important;
 }
 
-.memo-form-content {
-  resize: vertical;
-  min-height: 60px;
+.memo-form-btns {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
 }
 
-.memo-form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+#memo-add-btn {
+  margin: 0 12px 10px 12px !important;
+  width: calc(100% - 24px) !important;
 }
 
-.memo-add-trigger {
-  width: 100%;
-  justify-content: center;
+#memo-search {
+  margin: 0 12px !important;
+  width: calc(100% - 24px) !important;
 }
 
-/* ============ 列表 ============ */
+/* 列表 */
 .memo-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 0 12px 12px 12px !important;
 }
 
-.memo-empty {
-  text-align: center;
-  color: var(--SmartThemeQuoteColor, #888);
-  padding: 30px 10px;
-  font-size: 0.9em;
+/* 卡片 */
+.memo-card {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid var(--SmartThemeBorderColor, #333) !important;
+  border-radius: 10px !important;
+  padding: 12px !important;
+  margin-bottom: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s !important;
 }
 
-.memo-empty small {
-  opacity: 0.7;
+.memo-card:hover {
+  border-color: var(--SmartThemeQuoteColor, #666) !important;
+  background: rgba(255,255,255,0.08) !important;
 }
 
-/* ============ 卡片 ============ */
-.memo-item {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--SmartThemeBorderColor, #333);
-  border-radius: 8px;
-  padding: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
+.memo-card-top {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  margin-bottom: 8px !important;
 }
 
-.memo-item:hover {
-  border-color: var(--SmartThemeQuoteColor, #555);
+.memo-card-title {
+  font-weight: 600 !important;
+  font-size: 1em !important;
+  color: var(--SmartThemeBodyColor, #fff) !important;
+  word-break: break-word !important;
+  flex: 1 !important;
 }
 
-.memo-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 6px;
+.memo-card-btns {
+  display: flex !important;
+  gap: 4px !important;
+  flex-shrink: 0 !important;
 }
 
-.memo-title {
-  font-weight: 600;
-  color: var(--SmartThemeBodyColor, #fff);
-  font-size: 0.9em;
-  flex: 1;
-  word-break: break-word;
+.memo-act-btn {
+  background: none !important;
+  border: none !important;
+  font-size: 0.9em !important;
+  cursor: pointer !important;
+  padding: 4px 6px !important;
+  border-radius: 4px !important;
+  opacity: 0.7 !important;
 }
 
-.memo-item-actions {
-  display: flex;
-  gap: 2px;
+.memo-act-btn:hover {
+  background: rgba(255,255,255,0.15) !important;
+  opacity: 1 !important;
 }
 
-.memo-btn {
-  background: none;
-  border: none;
-  color: var(--SmartThemeQuoteColor, #888);
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 0.8em;
+.memo-card-body {
+  color: var(--SmartThemeQuoteColor, #aaa) !important;
+  font-size: 0.85em !important;
+  line-height: 1.5 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
 }
 
-.memo-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--SmartThemeBodyColor, #fff);
+.memo-card-time {
+  font-size: 0.75em !important;
+  color: var(--SmartThemeQuoteColor, #666) !important;
+  margin-top: 8px !important;
+  text-align: right !important;
 }
 
-.memo-delete:hover {
-  color: #ff6b6b;
+/* 底部 */
+.memo-footer {
+  padding: 12px 16px !important;
+  border-top: 1px solid var(--SmartThemeBorderColor, #444) !important;
+  font-size: 0.8em !important;
+  color: var(--SmartThemeQuoteColor, #888) !important;
+  text-align: center !important;
 }
 
-.memo-insert:hover {
-  color: #6bcf6b;
+.memo-footer code {
+  background: rgba(255,255,255,0.1) !important;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
 }
 
-.memo-content-preview {
-  color: var(--SmartThemeQuoteColor, #aaa);
-  font-size: 0.8em;
-  line-height: 1.4;
-  word-break: break-word;
-  white-space: pre-wrap;
+/* 滚动条 */
+.memo-list::-webkit-scrollbar {
+  width: 6px !important;
 }
 
-.memo-time {
-  font-size: 0.7em;
-  color: var(--SmartThemeQuoteColor, #666);
-  margin-top: 6px;
-  text-align: right;
-}
-
-/* ============ 底部 ============ */
-.memo-drawer-footer {
-  padding: 10px 16px;
-  border-top: 1px solid var(--SmartThemeBorderColor, #444);
-}
-
-.memo-drawer-footer small {
-  color: var(--SmartThemeQuoteColor, #888);
-  font-size: 0.75em;
-}
-
-.memo-drawer-footer code {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-/* ============ 滚动条 ============ */
-.memo-drawer-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.memo-drawer-body::-webkit-scrollbar-thumb {
-  background: var(--SmartThemeBorderColor, #444);
-  border-radius: 3px;
+.memo-list::-webkit-scrollbar-thumb {
+  background: var(--SmartThemeBorderColor, #555) !important;
+  border-radius: 3px !important;
 }
