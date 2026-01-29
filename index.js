@@ -1,362 +1,303 @@
 (function () {
-  const MODULE_NAME = "ChatSearchReplace";
-  const PANEL_ID = "chat-search-replace";
-
-  // 状态管理
-  const state = {
-    searchResults: [],
-    currentResultIndex: -1,
-    isRegex: false,
-    caseSensitive: false,
-    isPanelOpen: false,
-  };
+  const MODULE_NAME = "st-memo-plugin";
+  const PANEL_ID = "st-memo-panel";
+  const STORAGE_KEY = "st_memo_plugin_data";
 
   const ctx = SillyTavern.getContext();
   const { eventSource, event_types } = ctx;
 
-  function buildPanelHTML() {
-    return `
-      <div id="${PANEL_ID}" class="csr-floating-panel">
-        <div class="csr-header">
-          <span class="csr-title">🔍 搜索与替换</span>
-          <button id="${PANEL_ID}__close" class="csr-close-btn" title="关闭">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        
-        <div class="csr-body">
-          <div class="csr-row">
-            <input type="text" id="${PANEL_ID}__search" class="text_pole" placeholder="输入搜索内容..." autocomplete="off" />
-            <button id="${PANEL_ID}__btn-search" class="menu_button csr-btn" title="搜索">
-              <i class="fa-solid fa-search"></i>
+  // ============ 数据管理 ============
+  function loadMemos() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      console.error(`[${MODULE_NAME}] 加载备忘录失败:`, e);
+      return [];
+    }
+  }
+
+  function saveMemos(memos) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(memos));
+    } catch (e) {
+      console.error(`[${MODULE_NAME}] 保存备忘录失败:`, e);
+    }
+  }
+
+  function addMemo(content) {
+    const memos = loadMemos();
+    const newMemo = {
+      id: Date.now(),
+      content: content.trim(),
+      createdAt: new Date().toLocaleString(),
+      updatedAt: new Date().toLocaleString(),
+    };
+    memos.unshift(newMemo);
+    saveMemos(memos);
+    return newMemo;
+  }
+
+  function updateMemo(id, content) {
+    const memos = loadMemos();
+    const memo = memos.find((m) => m.id === id);
+    if (memo) {
+      memo.content = content.trim();
+      memo.updatedAt = new Date().toLocaleString();
+      saveMemos(memos);
+    }
+    return memo;
+  }
+
+  function deleteMemo(id) {
+    let memos = loadMemos();
+    memos = memos.filter((m) => m.id !== id);
+    saveMemos(memos);
+  }
+
+  // ============ UI 渲染 ============
+  function renderMemoList(container) {
+    const memos = loadMemos();
+    const listEl = container.querySelector(".memo-list");
+    if (!listEl) return;
+
+    if (memos.length === 0) {
+      listEl.innerHTML = `<div class="memo-empty">暂无备忘录，点击上方添加</div>`;
+      return;
+    }
+
+    listEl.innerHTML = memos
+      .map(
+        (memo) => `
+      <div class="memo-item" data-id="${memo.id}">
+        <div class="memo-content">${escapeHtml(memo.content)}</div>
+        <div class="memo-meta">
+          <span class="memo-time">${memo.updatedAt}</span>
+          <div class="memo-actions">
+            <button class="memo-btn memo-edit" title="编辑">
+              <i class="fa-solid fa-pen"></i>
             </button>
-          </div>
-          
-          <div class="csr-row">
-            <input type="text" id="${PANEL_ID}__replace" class="text_pole" placeholder="替换为..." autocomplete="off" />
-            <button id="${PANEL_ID}__btn-replace-one" class="menu_button csr-btn" title="替换当前">
-              <i class="fa-solid fa-arrow-right"></i>
+            <button class="memo-btn memo-copy" title="复制">
+              <i class="fa-solid fa-copy"></i>
             </button>
-            <button id="${PANEL_ID}__btn-replace-all" class="menu_button csr-btn" title="全部替换">
-              <i class="fa-solid fa-arrows-rotate"></i>
+            <button class="memo-btn memo-delete" title="删除">
+              <i class="fa-solid fa-trash"></i>
             </button>
-          </div>
-          
-          <div class="csr-row csr-options">
-            <label class="csr-checkbox">
-              <input type="checkbox" id="${PANEL_ID}__regex" />
-              <span>正则表达式</span>
-            </label>
-            <label class="csr-checkbox">
-              <input type="checkbox" id="${PANEL_ID}__case" />
-              <span>区分大小写</span>
-            </label>
-          </div>
-          
-          <div class="csr-row csr-nav">
-            <button id="${PANEL_ID}__btn-prev" class="menu_button csr-btn" title="上一个">
-              <i class="fa-solid fa-chevron-up"></i>
-            </button>
-            <span id="${PANEL_ID}__result-info" class="csr-result-info">0 / 0</span>
-            <button id="${PANEL_ID}__btn-next" class="menu_button csr-btn" title="下一个">
-              <i class="fa-solid fa-chevron-down"></i>
-            </button>
-            <button id="${PANEL_ID}__btn-clear" class="menu_button csr-btn" title="清除结果">
-              <i class="fa-solid fa-eraser"></i>
-            </button>
-          </div>
-          
-          <div id="${PANEL_ID}__preview" class="csr-preview">
-            <p class="csr-placeholder">准备就绪</p>
           </div>
         </div>
       </div>
-    `;
-  }
+    `
+      )
+      .join("");
 
-  function togglePanel() {
-    const $panel = $(`#${PANEL_ID}`);
-    
-    if ($panel.length === 0) {
-      $("body").append(buildPanelHTML());
-      const $newPanel = $(`#${PANEL_ID}`);
-      const panelEl = document.getElementById(PANEL_ID);
-      
-      bindEvents();
-      
-      // ===========================================
-      // 关键修复：事件隔离
-      // ===========================================
-      // 使用捕获阶段 (capture: true) 阻止事件向上传播到 Document
-      // 这能防止酒馆的全局快捷键或焦点管理逻辑干扰输入框
-      const stopPropagation = (e) => e.stopPropagation();
-      const eventsToBlock = ['mousedown', 'mouseup', 'click', 'keydown', 'keyup', 'keypress', 'input', 'change', 'focusin'];
-      
-      eventsToBlock.forEach(eventType => {
-          panelEl.addEventListener(eventType, stopPropagation, true);
+    // 绑定事件
+    listEl.querySelectorAll(".memo-item").forEach((item) => {
+      const id = parseInt(item.dataset.id, 10);
+
+      item.querySelector(".memo-edit")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openEditDialog(id, container);
       });
 
-      // 自动聚焦搜索框
-      setTimeout(() => $(`#${PANEL_ID}__search`).focus(), 100);
-      
-      state.isPanelOpen = true;
-    } else {
-      if (state.isPanelOpen) {
-        $panel.fadeOut(100);
-        state.isPanelOpen = false;
-      } else {
-        $panel.fadeIn(100);
-        $(`#${PANEL_ID}__search`).focus();
-        state.isPanelOpen = true;
-      }
-    }
-  }
+      item.querySelector(".memo-copy")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const memo = loadMemos().find((m) => m.id === id);
+        if (memo) {
+          navigator.clipboard.writeText(memo.content);
+          toastr.success("已复制到剪贴板");
+        }
+      });
 
-  function closePanel() {
-    $(`#${PANEL_ID}`).fadeOut(100);
-    state.isPanelOpen = false;
-  }
-
-  async function doSearch() {
-    const searchInput = $(`#${PANEL_ID}__search`).val();
-    if (!searchInput) return;
-
-    state.isRegex = $(`#${PANEL_ID}__regex`).prop("checked");
-    state.caseSensitive = $(`#${PANEL_ID}__case`).prop("checked");
-
-    let chatData;
-    try {
-      chatData = await ST_API.chatHistory.list();
-    } catch (err) {
-      console.error("无法获取聊天记录", err);
-      return;
-    }
-
-    const messages = chatData.messages;
-    state.searchResults = [];
-
-    let regex;
-    try {
-      if (state.isRegex) {
-        const flags = state.caseSensitive ? "g" : "gi";
-        regex = new RegExp(searchInput, flags);
-      } else {
-        const escaped = searchInput.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const flags = state.caseSensitive ? "g" : "gi";
-        regex = new RegExp(escaped, flags);
-      }
-    } catch (err) {
-      toastr.error("正则错误: " + err.message);
-      return;
-    }
-
-    messages.forEach((msg, index) => {
-      let textContent = "";
-      if (msg.parts && Array.isArray(msg.parts)) {
-        textContent = msg.parts.filter((p) => p.text).map((p) => p.text).join("\n");
-      } else if (typeof msg.content === "string") {
-        textContent = msg.content;
-      }
-      if (!textContent) return;
-
-      regex.lastIndex = 0;
-      const matches = [];
-      let match;
-      while ((match = regex.exec(textContent)) !== null) {
-        matches.push({ start: match.index, end: match.index + match[0].length, text: match[0] });
-        if (match[0].length === 0) regex.lastIndex++;
-      }
-      if (matches.length > 0) {
-        state.searchResults.push({
-          index,
-          role: msg.role,
-          name: msg.name || msg.role,
-          textContent,
-          matches,
-        });
-      }
+      item.querySelector(".memo-delete")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (confirm("确定删除这条备忘录吗？")) {
+          deleteMemo(id);
+          renderMemoList(container);
+          toastr.info("已删除");
+        }
+      });
     });
-
-    state.currentResultIndex = state.searchResults.length > 0 ? 0 : -1;
-    updateResultsUI();
-    
-    if (state.searchResults.length > 0) {
-      toastr.success(`找到 ${state.searchResults.reduce((a,b)=>a+b.matches.length,0)} 处匹配`);
-    } else {
-      toastr.info("未找到匹配内容");
-    }
   }
 
-  function updateResultsUI() {
-    const $preview = $(`#${PANEL_ID}__preview`);
-    const $info = $(`#${PANEL_ID}__result-info`);
+  function openEditDialog(id, container) {
+    const memos = loadMemos();
+    const memo = memos.find((m) => m.id === id);
+    if (!memo) return;
 
-    if (state.searchResults.length === 0) {
-      $preview.html('<p class="csr-placeholder">无结果</p>');
-      $info.text("0 / 0");
-      return;
-    }
+    const textarea = container.querySelector(".memo-input");
+    const addBtn = container.querySelector(".memo-add-btn");
 
-    $info.text(`${state.currentResultIndex + 1} / ${state.searchResults.length}`);
-    const current = state.searchResults[state.currentResultIndex];
-    
-    let html = escapeHtml(current.textContent);
-    // 反向高亮防止偏移
-    [...current.matches].sort((a,b)=>b.start-a.start).forEach(m => {
-       const before = html.substring(0, m.start);
-       const match = html.substring(m.start, m.end);
-       const after = html.substring(m.end);
-       html = `${before}<span class="csr-highlight">${match}</span>${after}`;
-    });
-
-    $preview.html(`
-      <div class="csr-result-header">
-        <strong>${current.name}</strong> <span>#${current.index}</span>
-      </div>
-      <div class="csr-result-text">${html}</div>
-    `);
-    
-    // 滚动聊天
-    const $msg = $("#chat .mes").eq(current.index);
-    if ($msg.length) {
-      $msg[0].scrollIntoView({ behavior: "smooth", block: "center" });
-      $msg.addClass("csr-flash");
-      setTimeout(()=> $msg.removeClass("csr-flash"), 1000);
+    if (textarea && addBtn) {
+      textarea.value = memo.content;
+      textarea.focus();
+      addBtn.textContent = "保存修改";
+      addBtn.dataset.editId = id;
     }
   }
 
   function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
-    return div.innerHTML;
-  }
-  
-  function replaceText(text, replaceWith) {
-     const searchInput = $(`#${PANEL_ID}__search`).val();
-     // 如果搜索框为空，直接返回原文本
-     if (!searchInput) return text;
-
-     let regex;
-     try {
-       if (state.isRegex) {
-         regex = new RegExp(searchInput, state.caseSensitive ? "g" : "gi");
-       } else {
-         const escaped = searchInput.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-         regex = new RegExp(escaped, state.caseSensitive ? "g" : "gi");
-       }
-     } catch (e) {
-       return text;
-     }
-     return text.replace(regex, replaceWith);
+    return div.innerHTML.replace(/\n/g, "<br>");
   }
 
-  async function replaceOne() {
-    if (state.currentResultIndex < 0) return;
-    const current = state.searchResults[state.currentResultIndex];
-    const replaceWith = $(`#${PANEL_ID}__replace`).val();
-    
-    const msgData = await ST_API.chatHistory.get({ index: current.index });
-    
-    // 处理多部分消息(Swipe)或普通消息
-    let newContent;
-    if (msgData.message.parts && Array.isArray(msgData.message.parts)) {
-        newContent = msgData.message.parts.map(p => {
-             // 仅替换文本类型的 part
-             if (p.text) {
-                 return {...p, text: replaceText(p.text, replaceWith)};
-             }
-             return p;
-        });
-    } else {
-        newContent = replaceText(current.textContent, replaceWith);
+  // ============ 弹窗面板 ============
+  function createPanel() {
+    if (document.getElementById(PANEL_ID)) return;
+
+    const panelHtml = `
+      <div id="${PANEL_ID}" class="memo-panel">
+        <div class="memo-panel-backdrop"></div>
+        <div class="memo-panel-content">
+          <div class="memo-panel-header">
+            <h3><i class="fa-solid fa-note-sticky"></i> 备忘录</h3>
+            <button class="memo-panel-close" title="关闭">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+          <div class="memo-panel-body">
+            <div class="memo-input-area">
+              <textarea class="memo-input text_pole" placeholder="输入备忘内容..." rows="3"></textarea>
+              <button class="menu_button memo-add-btn">添加备忘</button>
+            </div>
+            <div class="memo-list"></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML("beforeend", panelHtml);
+
+    const panel = document.getElementById(PANEL_ID);
+    const backdrop = panel.querySelector(".memo-panel-backdrop");
+    const closeBtn = panel.querySelector(".memo-panel-close");
+    const addBtn = panel.querySelector(".memo-add-btn");
+    const textarea = panel.querySelector(".memo-input");
+
+    // 关闭面板
+    const closePanel = () => {
+      panel.classList.remove("show");
+      textarea.value = "";
+      addBtn.textContent = "添加备忘";
+      delete addBtn.dataset.editId;
+    };
+
+    backdrop.addEventListener("click", closePanel);
+    closeBtn.addEventListener("click", closePanel);
+
+    // ESC 关闭
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && panel.classList.contains("show")) {
+        closePanel();
+      }
+    });
+
+    // 添加/编辑备忘
+    addBtn.addEventListener("click", () => {
+      const content = textarea.value.trim();
+      if (!content) {
+        toastr.warning("请输入备忘内容");
+        return;
+      }
+
+      const editId = addBtn.dataset.editId;
+      if (editId) {
+        updateMemo(parseInt(editId, 10), content);
+        toastr.success("已更新备忘");
+        delete addBtn.dataset.editId;
+        addBtn.textContent = "添加备忘";
+      } else {
+        addMemo(content);
+        toastr.success("已添加备忘");
+      }
+
+      textarea.value = "";
+      renderMemoList(panel);
+    });
+
+    // Ctrl+Enter 快捷添加
+    textarea.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key === "Enter") {
+        addBtn.click();
+      }
+    });
+
+    console.log(`[${MODULE_NAME}] 面板已创建`);
+  }
+
+  function showPanel() {
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) {
+      createPanel();
+    }
+    const panelEl = document.getElementById(PANEL_ID);
+    panelEl.classList.add("show");
+    renderMemoList(panelEl);
+  }
+
+  // ============ 注册菜单 ============
+  async function registerMenu() {
+    if (!window.ST_API?.ui?.registerExtensionsMenuItem) {
+      console.warn(`[${MODULE_NAME}] ST_API 未加载，使用备用方案`);
+      fallbackRegister();
+      return;
     }
 
-    await ST_API.chatHistory.update({ index: current.index, content: newContent });
-    await ST_API.ui.reloadChat();
-    
-    // 替换后刷新搜索状态
-    doSearch();
-  }
-
-  async function replaceAll() {
-    if (state.searchResults.length === 0) return;
-    const replaceWith = $(`#${PANEL_ID}__replace`).val();
-    
-    // 去重消息索引，倒序处理防止索引变化（虽然 update 不会改变索引，但好习惯）
-    const indices = [...new Set(state.searchResults.map(r => r.index))].sort((a,b)=>b-a);
-    
-    let count = 0;
-    for (const idx of indices) {
-        const msgData = await ST_API.chatHistory.get({ index: idx });
-        
-        let newContent;
-        let originalText = "";
-        
-        if (msgData.message.parts && Array.isArray(msgData.message.parts)) {
-             newContent = msgData.message.parts.map(p => {
-                 if (p.text) return {...p, text: replaceText(p.text, replaceWith)};
-                 return p;
-             });
-        } else {
-             originalText = msgData.message.content || "";
-             newContent = replaceText(originalText, replaceWith);
-        }
-
-        await ST_API.chatHistory.update({ index: idx, content: newContent });
-        count++;
+    try {
+      await window.ST_API.ui.registerExtensionsMenuItem({
+        id: "st-memo-plugin.open",
+        label: "备忘录",
+        icon: "fa-solid fa-note-sticky",
+        onClick: () => {
+          showPanel();
+        },
+      });
+      console.log(`[${MODULE_NAME}] 菜单项已注册`);
+    } catch (e) {
+      console.error(`[${MODULE_NAME}] 注册菜单失败:`, e);
+      fallbackRegister();
     }
-    
-    await ST_API.ui.reloadChat();
-    toastr.success(`已在 ${count} 条消息中完成替换`);
-    state.searchResults = [];
-    updateResultsUI();
   }
 
-  function bindEvents() {
-    $(`#${PANEL_ID}__close`).on("click", closePanel);
-    
-    $(`#${PANEL_ID}__btn-search`).on("click", doSearch);
-    $(`#${PANEL_ID}__search`).on("keydown", (e) => {
-        if (e.key === "Enter") {
-            // 阻止 Enter 键可能触发的酒馆其他行为
-            e.preventDefault(); 
-            doSearch();
-        }
+  // 备用方案：直接操作 DOM
+  function fallbackRegister() {
+    const menu = document.getElementById("extensionsMenu");
+    if (!menu) {
+      console.warn(`[${MODULE_NAME}] 找不到扩展菜单`);
+      return;
+    }
+
+    const itemId = "st-memo-plugin-menu-item";
+    if (document.getElementById(itemId)) return;
+
+    const menuItem = document.createElement("div");
+    menuItem.id = itemId;
+    menuItem.className = "list-group-item flex-container flexGap5";
+    menuItem.innerHTML = `
+      <i class="fa-solid fa-note-sticky extensionsMenuExtensionButton"></i>
+      备忘录
+    `;
+    menuItem.addEventListener("click", () => {
+      showPanel();
+      // 关闭扩展菜单
+      document.getElementById("extensionsMenu")?.classList.remove("openDrawer");
     });
-    
-    $(`#${PANEL_ID}__btn-replace-one`).on("click", replaceOne);
-    $(`#${PANEL_ID}__btn-replace-all`).on("click", replaceAll);
-    
-    $(`#${PANEL_ID}__btn-prev`).on("click", () => {
-        if(state.searchResults.length){
-            state.currentResultIndex = (state.currentResultIndex - 1 + state.searchResults.length) % state.searchResults.length;
-            updateResultsUI();
-        }
-    });
-    
-    $(`#${PANEL_ID}__btn-next`).on("click", () => {
-        if(state.searchResults.length){
-            state.currentResultIndex = (state.currentResultIndex + 1) % state.searchResults.length;
-            updateResultsUI();
-        }
-    });
-    
-    $(`#${PANEL_ID}__btn-clear`).on("click", () => {
-        state.searchResults = [];
-        state.currentResultIndex = -1;
-        updateResultsUI();
-        $(`#${PANEL_ID}__search`).val("").focus();
-    });
+
+    menu.appendChild(menuItem);
+    console.log(`[${MODULE_NAME}] 菜单项已注册 (fallback)`);
   }
 
-  function registerMenuItem() {
-    ST_API.ui.registerExtensionsMenuItem({
-      id: `${PANEL_ID}.menu`,
-      label: "搜索替换",
-      icon: "fa-solid fa-magnifying-glass-arrow-right",
-      onClick: togglePanel,
-    });
+  // ============ 初始化 ============
+  function init() {
+    createPanel();
+    registerMenu();
+    console.log(`[${MODULE_NAME}] 插件已加载`);
   }
 
-  eventSource.on(event_types.APP_READY, registerMenuItem);
+  if (eventSource && event_types?.APP_READY) {
+    eventSource.on(event_types.APP_READY, init);
+  } else {
+    // 备用：延迟加载
+    setTimeout(init, 2000);
+  }
 })();
