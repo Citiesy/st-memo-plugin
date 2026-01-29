@@ -74,18 +74,12 @@
     );
   }
 
-  // ============ 打开抽屉 ============
+  // ============ 打开/关闭面板 ============
   function openDrawer() {
     const drawer = document.getElementById(PANEL_ID);
     if (drawer) {
       drawer.classList.add("open");
       renderMemoList();
-      console.log(`[${MODULE_NAME}] 抽屉已打开`);
-    } else {
-      console.error(`[${MODULE_NAME}] 找不到抽屉元素`);
-      // 尝试重新创建
-      createDrawer();
-      setTimeout(openDrawer, 100);
     }
   }
 
@@ -98,6 +92,19 @@
 
   // ============ 斜杠命令 ============
   function registerCommands() {
+    // /memo-open - 打开备忘录面板
+    registerSlashCommand(
+      "memo-open",
+      () => {
+        openDrawer();
+        return "";
+      },
+      [],
+      "- 打开备忘录面板",
+      false,
+      true
+    );
+
     // /memo 标题 - 插入备忘录内容
     registerSlashCommand(
       "memo",
@@ -164,6 +171,11 @@
           return "";
         }
 
+        if (getMemoByTitle(title)) {
+          toastr.warning("已存在同名备忘录");
+          return "";
+        }
+
         addMemo(title, content);
         toastr.success(`已添加备忘录: ${title}`);
         return "";
@@ -174,20 +186,7 @@
       true
     );
 
-    // /memo-open - 打开备忘录面板
-    registerSlashCommand(
-      "memo-open",
-      () => {
-        openDrawer();
-        return "";
-      },
-      [],
-      "- 打开备忘录面板",
-      false,
-      true
-    );
-
-    console.log(`[${MODULE_NAME}] 斜杠命令已注册`);
+    console.log(`[${MODULE_NAME}] 斜杠命令已注册: /memo-open, /memo, /memo-list, /memo-add`);
   }
 
   // ============ UI 渲染 ============
@@ -240,10 +239,7 @@
       )
       .join("");
 
-    bindMemoEvents(listEl, memos);
-  }
-
-  function bindMemoEvents(listEl, memos) {
+    // 绑定事件
     listEl.querySelectorAll(".memo-item").forEach((item) => {
       const id = parseInt(item.dataset.id, 10);
       const memo = memos.find((m) => m.id === id);
@@ -349,6 +345,7 @@
   function createDrawer() {
     if (document.getElementById(PANEL_ID)) return;
 
+    // 右侧触发按钮
     const toggleHtml = `
       <div id="${TOGGLE_ID}" class="memo-toggle" title="备忘录">
         <span>备</span>
@@ -357,6 +354,7 @@
       </div>
     `;
 
+    // 侧边抽屉面板
     const drawerHtml = `
       <div id="${PANEL_ID}" class="memo-drawer">
         <div class="memo-drawer-header">
@@ -367,6 +365,7 @@
         </div>
 
         <div class="memo-drawer-body">
+          <!-- 添加表单 -->
           <div class="memo-form">
             <input type="text" class="memo-form-title text_pole" placeholder="标题（用于 /memo 标题 快速插入）" maxlength="50">
             <textarea class="memo-form-content text_pole" placeholder="内容..." rows="4"></textarea>
@@ -376,14 +375,17 @@
             </div>
           </div>
 
+          <!-- 添加按钮 -->
           <button class="menu_button memo-add-trigger">
             <i class="fa-solid fa-plus"></i> 添加备忘录
           </button>
 
+          <!-- 搜索框 -->
           <div class="memo-search">
             <input type="text" class="memo-search-input text_pole" placeholder="搜索备忘录...">
           </div>
 
+          <!-- 备忘列表 -->
           <div class="memo-list"></div>
         </div>
 
@@ -396,6 +398,7 @@
     document.body.insertAdjacentHTML("beforeend", toggleHtml);
     document.body.insertAdjacentHTML("beforeend", drawerHtml);
 
+    // 绑定事件
     const toggle = document.getElementById(TOGGLE_ID);
     const drawer = document.getElementById(PANEL_ID);
     const closeBtn = drawer.querySelector(".memo-drawer-close");
@@ -404,16 +407,17 @@
     const cancelBtn = drawer.querySelector(".memo-form-cancel");
     const searchInput = drawer.querySelector(".memo-search-input");
 
+    // 打开/关闭抽屉
     toggle.addEventListener("click", () => {
+      drawer.classList.toggle("open");
       if (drawer.classList.contains("open")) {
-        closeDrawer();
-      } else {
-        openDrawer();
+        renderMemoList();
       }
     });
 
     closeBtn.addEventListener("click", closeDrawer);
 
+    // 点击外部关闭
     document.addEventListener("click", (e) => {
       if (
         drawer.classList.contains("open") &&
@@ -424,14 +428,17 @@
       }
     });
 
+    // 添加按钮
     addTrigger.addEventListener("click", () => {
       openEditForm();
     });
 
+    // 取消编辑
     cancelBtn.addEventListener("click", () => {
       closeEditForm();
     });
 
+    // 提交表单
     submitBtn.addEventListener("click", () => {
       const titleInput = drawer.querySelector(".memo-form-title");
       const contentInput = drawer.querySelector(".memo-form-content");
@@ -470,6 +477,7 @@
       renderMemoList();
     });
 
+    // 搜索
     let searchTimer;
     searchInput.addEventListener("input", () => {
       clearTimeout(searchTimer);
@@ -544,84 +552,12 @@
     });
   }
 
-  // ============ 注册扩展菜单（修复版） ============
-  function registerMenu() {
-    // 方案1：使用 ST_API
-    if (window.ST_API?.ui?.registerExtensionsMenuItem) {
-      window.ST_API.ui.registerExtensionsMenuItem({
-        id: "st-memo-plugin.open",
-        label: "备忘录",
-        icon: "fa-solid fa-note-sticky",
-        onClick: () => {
-          console.log(`[${MODULE_NAME}] 魔棒菜单点击`);
-          // 先关闭扩展菜单
-          const extMenu = document.getElementById("extensionsMenu");
-          if (extMenu) {
-            extMenu.classList.remove("openDrawer");
-          }
-          // 延迟打开备忘录
-          setTimeout(() => {
-            openDrawer();
-          }, 100);
-        },
-      }).then(() => {
-        console.log(`[${MODULE_NAME}] ST_API 菜单注册成功`);
-      }).catch((e) => {
-        console.error(`[${MODULE_NAME}] ST_API 菜单注册失败:`, e);
-        fallbackRegister();
-      });
-    } else {
-      // 方案2：直接操作 DOM
-      fallbackRegister();
-    }
-  }
-
-  function fallbackRegister() {
-    const menu = document.getElementById("extensionsMenu");
-    if (!menu) {
-      console.warn(`[${MODULE_NAME}] 找不到扩展菜单，延迟重试`);
-      setTimeout(fallbackRegister, 1000);
-      return;
-    }
-
-    const itemId = "st-memo-plugin-menu-item";
-    if (document.getElementById(itemId)) return;
-
-    const menuItem = document.createElement("div");
-    menuItem.id = itemId;
-    menuItem.className = "list-group-item flex-container flexGap5";
-    menuItem.style.cursor = "pointer";
-    menuItem.innerHTML = `
-      <i class="fa-solid fa-note-sticky extensionsMenuExtensionButton"></i>
-      <span>备忘录</span>
-    `;
-
-    menuItem.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log(`[${MODULE_NAME}] Fallback 菜单点击`);
-      
-      // 关闭扩展菜单
-      menu.classList.remove("openDrawer");
-      
-      // 打开备忘录
-      setTimeout(() => {
-        openDrawer();
-      }, 150);
-    });
-
-    menu.appendChild(menuItem);
-    console.log(`[${MODULE_NAME}] Fallback 菜单注册成功`);
-  }
-
   // ============ 初始化 ============
   function init() {
-    console.log(`[${MODULE_NAME}] 开始初始化...`);
     createDrawer();
     registerCommands();
-    registerMenu();
     console.log(`[${MODULE_NAME}] 插件已加载`);
-    console.log(`[${MODULE_NAME}] 可用命令: /memo, /memo-list, /memo-add, /memo-open`);
+    console.log(`[${MODULE_NAME}] 可用命令: /memo-open, /memo <标题>, /memo-list, /memo-add <标题::内容>`);
   }
 
   if (eventSource && event_types?.APP_READY) {
