@@ -1,11 +1,12 @@
 {
-  "display_name": "Chat Search & Replace",
+  "display_name": "备忘录",
   "loading_order": 10,
   "requires": [],
   "optional": [],
   "js": "index.js",
   "css": "style.css",
-  "author": "XI",
+  "author": "You",
   "version": "1.0.0",
-  "description": "搜索和替换聊天记录中的文本内容，支持正则表达式"
+  "homePage": "",
+  "auto_update": false
 }
