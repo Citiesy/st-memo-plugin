@@ -7,10 +7,45 @@
   const { eventSource, event_types, registerSlashCommand } = ctx;
 
   // ============ 数据管理 ============
+  function normalizeMemos(data) {
+    let memos = [];
+    if (Array.isArray(data)) {
+      memos = data;
+    } else if (data && typeof data === "object") {
+      if (Array.isArray(data.memos)) {
+        memos = data.memos;
+      } else {
+        memos = Object.values(data);
+      }
+    }
+
+    return memos
+      .map((memo, index) => {
+        if (!memo || typeof memo !== "object") return null;
+        const title = typeof memo.title === "string" ? memo.title.trim() : String(memo.title ?? "").trim();
+        const content = typeof memo.content === "string" ? memo.content.trim() : String(memo.content ?? "").trim();
+        if (!title && !content) return null;
+
+        return {
+          id: Number.isFinite(memo.id) ? memo.id : Date.now() + index,
+          title: title || `未命名-${index + 1}`,
+          content,
+          updatedAt: typeof memo.updatedAt === "string" ? memo.updatedAt : memo.updatedAt ? String(memo.updatedAt) : "",
+        };
+      })
+      .filter(Boolean);
+  }
+
   function loadMemos() {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      const normalized = normalizeMemos(parsed);
+      if (!Array.isArray(parsed) || parsed.length !== normalized.length) {
+        saveMemos(normalized);
+      }
+      return normalized;
     } catch (e) {
       console.error(`[${MODULE_NAME}] 加载失败:`, e);
       return [];
@@ -238,7 +273,8 @@
 
     let html = "";
     memos.forEach((memo) => {
-      const preview = memo.content.length > 60 ? memo.content.substring(0, 60) + "..." : memo.content;
+      const memoContent = memo.content ?? "";
+      const preview = memoContent.length > 60 ? memoContent.substring(0, 60) + "..." : memoContent;
       html += `
         <div class="memo-card" data-id="${memo.id}">
           <div class="memo-card-top">
@@ -294,7 +330,8 @@
       card.addEventListener("click", () => {
         const body = card.querySelector(".memo-card-body");
         const isExpanded = card.classList.toggle("expanded");
-        body.textContent = isExpanded ? memo.content : (memo.content.length > 60 ? memo.content.substring(0, 60) + "..." : memo.content);
+        const memoContent = memo.content ?? "";
+        body.textContent = isExpanded ? memoContent : (memoContent.length > 60 ? memoContent.substring(0, 60) + "..." : memoContent);
       });
     });
   }
